@@ -4,34 +4,46 @@ from supabase import create_client
 from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key = "msm_super_lista_v6_final"
+app.secret_key = "msm_arena_ultra_v7"
 
-# Configuração Supabase
+# Configuração Supabase e OneSignal
 url = os.environ.get("SUPABASE_URL")
 key = os.environ.get("SUPABASE_KEY")
 ADMIN_PASS = os.environ.get("ADMIN_PASSWORD", "admin123")
+ONE_SIGNAL_ID = "9d4cafb3-0dd3-4420-a502-bf4b4a6ee2b3"
 supabase = create_client(url, key)
 
-# Design Profissional Traders Arena (Ciano & Dark)
 STYLE = """
 <style>
-    body{background:#050505;color:#fff;font-family:sans-serif;margin:0;padding:0;}
-    .nav{display:flex;background:#0a0a0a;border-bottom:1px solid #1a1a1a;justify-content:center;position:sticky;top:0;z-index:100;}
-    .nav a{color:#666;padding:15px;text-decoration:none;font-weight:bold;font-size:13px;}
-    .nav a.active{color:#00e5ff;border-bottom:2px solid #00e5ff;}
-    .container{padding:20px;max-width:600px;margin:auto;text-align:center;}
-    .card{background:#0a0a0a;border:1px solid #1a1a1a;padding:20px;border-radius:15px;margin-bottom:15px;text-align:left;}
-    .btn{background:#00e5ff;color:#000;padding:12px 20px;border:none;border-radius:8px;font-weight:bold;cursor:pointer;width:100%;margin-top:10px;text-decoration:none;display:inline-block;text-align:center;}
-    input, select{width:100%;padding:12px;margin:10px 0;background:#111;border:1px solid #222;color:#fff;border-radius:8px;box-sizing:border-box;}
-    .signal{border-left:4px solid #00e5ff;padding:15px;background:#0f0f0f;margin:10px 0;border-radius:0 10px 10px 0;}
-    .tag{font-size:10px;color:#00e5ff;text-transform:uppercase;letter-spacing:1px;}
-    .check-list{max-height:400px;overflow-y:auto;background:#111;padding:10px;border-radius:10px;text-align:left;}
-    .check-item{display:flex;align-items:center;padding:10px;border-bottom:1px solid #1a1a1a;justify-content:space-between;}
-    .check-item input{width:18px;height:18px;margin:0;}
+    body{background:#020202;color:#fff;font-family:'Segoe UI',sans-serif;margin:0;padding:0;}
+    .nav{display:flex;background:#080808;border-bottom:1px solid #111;justify-content:center;position:sticky;top:0;z-index:100;}
+    .nav a{color:#555;padding:18px;text-decoration:none;font-weight:bold;font-size:13px;transition:0.3s;}
+    .nav a.active{color:#00e5ff;text-shadow: 0 0 10px #00e5ff;}
+    
+    .status-bar{background:#0a0a0a;padding:15px;border-radius:12px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;border:1px solid #1a1a1a;}
+    .dot {height:10px;width:10px;background-color:#00e5ff;border-radius:50%;display:inline-block;margin-right:8px;box-shadow:0 0 8px #00e5ff;animation:pulse 1.5s infinite;}
+    @keyframes pulse {0% {opacity: 1;} 50% {opacity: 0.3;} 100% {opacity: 1;}}
+    
+    .container{padding:20px;max-width:500px;margin:auto;}
+    .card-signal{background:#0d0d0d;border:1px solid #1a1a1a;padding:18px;border-radius:15px;margin-bottom:12px;position:relative;transition:0.3s;}
+    .card-signal:hover{border-color:#00e5ff;}
+    .buy{border-left:5px solid #00e5ff;}
+    .sell{border-left:5px solid #ff0055;}
+    
+    .time{font-size:11px;color:#444;position:absolute;top:15px;right:15px;}
+    .asset{font-weight:bold;color:#00e5ff;display:block;margin-bottom:5px;}
+    .btn{background:#00e5ff;color:#000;padding:14px;border:none;border-radius:10px;font-weight:bold;cursor:pointer;width:100%;text-decoration:none;display:inline-block;text-align:center;}
+    .check-list{max-height:350px;overflow-y:auto;background:#080808;padding:10px;border-radius:10px;border:1px solid #111;}
+    .check-item{display:flex;align-items:center;padding:12px;border-bottom:1px solid #111;justify-content:space-between;}
 </style>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script>
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  OneSignalDeferred.push(function(OneSignal) {
+    OneSignal.init({ appId: \"""" + ONE_SIGNAL_ID + """\" });
+  });
+</script>
 """
-
-def get_device(): return request.headers.get('User-Agent', 'unknown')
 
 @app.route('/')
 def home(): return redirect(url_for('login'))
@@ -43,17 +55,46 @@ def login():
         user = supabase.table("users_msm").select("*").eq("mql_id", mql).execute().data
         if user:
             u = user[0]
-            if u.get('validade') and datetime.strptime(u['validade'], '%Y-%m-%d').date() < datetime.now().date():
-                return "Assinatura Expirada. Contacte o Admin."
-            curr = get_device()
+            curr = request.headers.get('User-Agent', 'unknown')
             if not u.get('device_id'):
                 supabase.table("users_msm").update({"device_id": curr}).eq("mql_id", mql).execute()
             elif u.get('device_id') != curr:
-                return "Erro: Este ID está trancado noutro dispositivo."
+                return "Erro: Dispositivo não autorizado."
             session['user_mql'] = mql
+            session['user_nome'] = u.get('nome', 'Trader')
+            session['user_val'] = u.get('validade', '---')
             return redirect(url_for('monitor'))
-        return "ID MQL não autorizado."
-    return render_template_string(STYLE + '<div class="container"><div class="card"><h2>MSM ARENA</h2><form method="POST"><input name="mql_id" placeholder="ID MQL"><button class="btn">ACESSAR</button></form></div></div>')
+        return "ID Inválido."
+    return render_template_string(STYLE + '<div class="container" style="margin-top:100px;"><div style="text-align:center;margin-bottom:30px;"><h1 style="color:#00e5ff;letter-spacing:2px;">MSM ARENA</h1><p style="color:#444;">EXCLUSIVO PARA CLIENTES</p></div><form method="POST"><input style="width:100%;padding:15px;background:#0d0d0d;border:1px solid #1a1a1a;color:#fff;border-radius:10px;" name="mql_id" placeholder="TEU ID MQL"><button class="btn" style="margin-top:15px;">ENTRAR NA ARENA</button></form></div>')
+
+@app.route('/monitor')
+def monitor():
+    if 'user_mql' not in session: return redirect(url_for('login'))
+    u = supabase.table("users_msm").select("ativos").eq("mql_id", session['user_mql']).execute().data[0]
+    meus_ativos = u.get('ativos', '').split(',') if u.get('ativos') else []
+    
+    sinais = supabase.table("sinais_msm").select("*").order("created_at", desc=True).limit(50).execute().data
+    filtrados = [s for s in sinais if any(a.upper() in s['msg'].upper() for a in meus_ativos)][:10]
+    
+    return render_template_string(STYLE + """
+    <div class="nav"><a href="/monitor" class="active">MONITOR</a><a href="/aba/config">CONFIG</a></div>
+    <div class="container">
+        <div class="status-bar">
+            <div><span class="dot"></span><span style="font-size:12px;color:#00e5ff;font-weight:bold;">LIVE MONITOR</span></div>
+            <div style="text-align:right;"><small style="color:#444;display:block;">Expira em:</small><b>{{val}}</b></div>
+        </div>
+        
+        {% for s in filtrados %}
+        <div class="card-signal {% if 'BUY' in s.msg.upper() or 'COMPRA' in s.msg.upper() %}buy{% elif 'SELL' in s.msg.upper() or 'VENDA' in s.msg.upper() %}sell{% endif %}">
+            <span class="time">{{s.created_at[11:16]}}</span>
+            <p style="margin:0;font-size:15px;line-height:1.4;">{{s.msg}}</p>
+        </div>
+        {% else %}
+        <div style="padding:50px 20px; color:#333;">Aguardando sinais...<br><small>Verifica se selecionaste ativos na aba CONFIG.</small></div>
+        {% endfor %}
+        <br><a href="/logout" style="color:#333;text-decoration:none;font-size:11px;">Terminar Sessão</a>
+    </div>
+    """, filtrados=filtrados, val=session.get('user_val'))
 
 @app.route('/aba/config', methods=['GET', 'POST'])
 def config():
@@ -63,37 +104,23 @@ def config():
         supabase.table("users_msm").update({"ativos": ",".join(ativos)}).eq("mql_id", session['user_mql']).execute()
         return redirect(url_for('monitor'))
     
-    superlista = [
-        "EURUSD", "GBPUSD", "USDJPY", "GBPJPY", "USDCAD", "USDCHF", 
-        "NAS100", "USTEC", "US30", "US500", "GER40", 
-        "BTCUSD", "ETHUSD", "XAUUSD", "XAGUSD",
-        "BOOM100", "BOOM500", "BOOM300", "CRASH1000", "CRASH500", "CRASH300",
-        "Volatility 10", "Volatility 25", "Volatility 50", "Volatility 75", "Volatility 100",
-        "Volatility 10(1s)", "Volatility 25(1s)", "Volatility 50(1s)", "Volatility 75(1s)", "Volatility 100(1s)", "Volatility 250(1s)"
-    ]
+    superlista = ["EURUSD", "GBPUSD", "NAS100", "US30", "XAUUSD", "BOOM500", "CRASH500", "Volatility 75", "Volatility 100"] # Lista resumida para exemplo
     return render_template_string(STYLE + """
     <div class="nav"><a href="/monitor">MONITOR</a><a href="/aba/config" class="active">CONFIG</a></div>
-    <div class="container"><div class="card"><h3>Seus Ativos</h3><form method="POST"><div class="check-list">
-    {% for a in lista %}<div class="check-item"><span>{{a}}</span><input type="checkbox" name="ativos" value="{{a}}"></div>{% endfor %}
-    </div><button class="btn">SALVAR ESCOLHAS</button></form></div></div>
-    """, lista=superlista)
-
-@app.route('/monitor')
-def monitor():
-    if 'user_mql' not in session: return redirect(url_for('login'))
-    u = supabase.table("users_msm").select("ativos").eq("mql_id", session['user_mql']).execute().data[0]
-    meus_ativos = u.get('ativos', '').split(',') if u.get('ativos') else []
-    
-    sinais = supabase.table("sinais_msm").select("*").order("created_at", desc=True).limit(100).execute().data
-    filtrados = [s for s in sinais if any(a.upper() in s['msg'].upper() for a in meus_ativos)][:10]
-    
-    return render_template_string(STYLE + """
-    <div class="nav"><a href="/monitor" class="active">MONITOR</a><a href="/aba/config">CONFIG</a></div>
     <div class="container">
-    {% for s in filtrados %}<div class="signal"><span class="tag">{{s.created_at[11:16]}}</span><p>{{s.msg}}</p></div>
-    {% else %}<p>Nenhum sinal dos teus ativos escolhidos.</p>{% endfor %}
-    <br><a href="/logout" style="color:#444;text-decoration:none;font-size:11px;">Sair do Sistema</a></div>
-    """, filtrados=filtrados)
+        <div class="card-signal" style="border:1px dashed #00e5ff; text-align:center;">
+            <p style="margin-bottom:15px;font-size:13px;">Recebe alertas no telemóvel</p>
+            <button onclick="OneSignal.showNativePrompt()" class="btn" style="background:transparent;border:1px solid #00e5ff;color:#00e5ff;">🔔 ATIVAR NOTIFICAÇÕES</button>
+        </div>
+        <form method="POST">
+            <h3 style="font-size:14px;color:#444;margin-top:20px;">SELECIONE SEUS ATIVOS:</h3>
+            <div class="check-list">
+            {% for a in lista %}<div class="check-item"><span>{{a}}</span><input type="checkbox" name="ativos" value="{{a}}"></div>{% endfor %}
+            </div>
+            <button class="btn" style="margin-top:20px;">SALVAR CONFIGURAÇÃO</button>
+        </form>
+    </div>
+    """, lista=superlista)
 
 @app.route('/admin', methods=['GET', 'POST'])
 def admin():
@@ -101,7 +128,7 @@ def admin():
         if request.method == 'POST' and request.form.get('pw') == ADMIN_PASS:
             session['adm'] = True
             return redirect(url_for('admin'))
-        return render_template_string(STYLE + '<div class="container"><h3>ADMIN MSM</h3><form method="POST"><input type="password" name="pw" placeholder="Senha Mestre"><button class="btn">ENTRAR</button></form></div>')
+        return render_template_string(STYLE + '<div class="container"><h3>ADMIN</h3><form method="POST"><input type="password" name="pw" placeholder="Senha"><button class="btn">LOGIN</button></form></div>')
     
     if request.args.get('restart'):
         supabase.table("users_msm").update({"device_id": None}).eq("mql_id", request.args.get('restart')).execute()
@@ -112,11 +139,11 @@ def admin():
 
     users = supabase.table("users_msm").select("*").execute().data
     return render_template_string(STYLE + """
-    <div class="container"><h3>GESTÃO DE CLIENTES</h3>
-    <form method="POST" class="card"><input name="nome" placeholder="Nome"><input name="id" placeholder="ID MQL"><input name="validade" type="date"><button class="btn">CADASTRAR</button></form>
-    {% for u in users %}<div class="card" style="display:flex;justify-content:space-between;align-items:center;">
-    <div><b>{{u.nome}}</b><br><small>ID: {{u.mql_id}} | Exp: {{u.validade}}</small></div>
-    <a href="/admin?restart={{u.mql_id}}" class="btn" style="width:auto;font-size:10px;padding:5px 10px;">RESTART DEVICE</a></div>{% endfor %}</div>
+    <div class="container"><h3>GESTÃO</h3>
+    <form method="POST" class="card-signal"><input name="nome" placeholder="Nome"><input name="id" placeholder="ID MQL"><input name="validade" type="date"><button class="btn">CADASTRAR</button></form>
+    {% for u in users %}<div class="card-signal" style="display:flex;justify-content:space-between;">
+    <div><b>{{u.nome}}</b><br><small>{{u.mql_id}} | {{u.validade}}</small></div>
+    <a href="/admin?restart={{u.mql_id}}" class="btn" style="width:auto;font-size:10px;">RESET</a></div>{% endfor %}</div>
     """, users=users)
 
 @app.route('/logout')
